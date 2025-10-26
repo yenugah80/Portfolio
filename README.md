@@ -28,7 +28,7 @@ A modern, glossy, and trendy portfolio website featuring GitHub and LinkedIn dat
 ## Customization
 
 ### GitHub Integration
-- Edit the default username in `script.js` (line 36): `let githubUsername = 'your-username';`
+- Edit the default username in `script.js` (CONFIG.defaultGitHubUsername): Change `'yenugah80'` to your username
 
 ### Personal Information
 - Update the content in `index.html` for:

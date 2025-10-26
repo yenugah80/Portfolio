@@ -1,3 +1,10 @@
+// ===== CONFIGURATION =====
+const CONFIG = {
+    defaultGitHubUsername: 'yenugah80',
+    apiRetryAttempts: 3,
+    apiRetryDelay: 1000
+};
+
 // ===== MOBILE MENU TOGGLE =====
 const hamburger = document.querySelector('.hamburger');
 const navMenu = document.querySelector('.nav-menu');
@@ -40,22 +47,59 @@ window.addEventListener('scroll', () => {
 });
 
 // ===== GITHUB API INTEGRATION =====
-let githubUsername = 'yenugah80'; // Default username
+let githubUsername = CONFIG.defaultGitHubUsername;
 
 // Try to get username from input on page load
 window.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('github-username');
     if (input) {
-        input.value = githubUsername;
+        input.value = CONFIG.defaultGitHubUsername;
     }
 });
 
+// Validate GitHub username
+function isValidGitHubUsername(username) {
+    // GitHub username rules: alphanumeric and hyphens, cannot start/end with hyphen
+    const regex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/;
+    return regex.test(username);
+}
+
+// Display notification message
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'error' ? '#ef4444' : '#10b981'};
+        color: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
 async function loadGitHubProjects() {
     const usernameInput = document.getElementById('github-username');
-    const username = usernameInput?.value.trim() || githubUsername;
+    const username = usernameInput?.value.trim() || CONFIG.defaultGitHubUsername;
     
     if (!username) {
-        alert('Please enter a GitHub username');
+        showNotification('Please enter a GitHub username', 'error');
+        return;
+    }
+    
+    // Validate username
+    if (!isValidGitHubUsername(username)) {
+        showNotification('Invalid GitHub username format', 'error');
         return;
     }
     
@@ -69,20 +113,30 @@ async function loadGitHubProjects() {
     projectsGrid.innerHTML = '';
     
     try {
-        // Fetch user info
+        // Fetch user info with error handling
         const userResponse = await fetch(`https://api.github.com/users/${username}`);
         if (!userResponse.ok) {
-            throw new Error('User not found');
+            if (userResponse.status === 404) {
+                throw new Error('User not found');
+            } else if (userResponse.status === 403) {
+                throw new Error('API rate limit exceeded. Please try again later.');
+            } else {
+                throw new Error('Failed to fetch user data');
+            }
         }
         const userData = await userResponse.json();
         
         // Update stats
         document.getElementById('repos-count').textContent = userData.public_repos || 0;
         
-        // Fetch repositories
+        // Fetch repositories with error handling
         const reposResponse = await fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=12`);
         if (!reposResponse.ok) {
-            throw new Error('Failed to fetch repositories');
+            if (reposResponse.status === 403) {
+                throw new Error('API rate limit exceeded. Please try again later.');
+            } else {
+                throw new Error('Failed to fetch repositories');
+            }
         }
         const repos = await reposResponse.json();
         
@@ -103,9 +157,12 @@ async function loadGitHubProjects() {
             projectsGrid.appendChild(projectCard);
         });
         
+        showNotification('Projects loaded successfully!', 'success');
+        
     } catch (error) {
         loading.style.display = 'none';
         projectsGrid.innerHTML = `<p style="text-align: center; color: #ef4444;">Error loading projects: ${error.message}</p>`;
+        showNotification(error.message, 'error');
         console.error('Error fetching GitHub data:', error);
     }
 }
@@ -155,11 +212,8 @@ if (contactForm) {
     contactForm.addEventListener('submit', (e) => {
         e.preventDefault();
         
-        // Get form data
-        const formData = new FormData(contactForm);
-        
         // Show success message
-        alert('Thank you for your message! I will get back to you soon.');
+        showNotification('Thank you for your message! I will get back to you soon.', 'success');
         
         // Reset form
         contactForm.reset();
@@ -193,16 +247,23 @@ document.querySelectorAll('.section').forEach(section => {
 function animateCounter(element, target, duration = 2000) {
     let current = 0;
     const increment = target / (duration / 16);
+    let startTime = null;
     
-    const timer = setInterval(() => {
-        current += increment;
-        if (current >= target) {
-            element.textContent = target;
-            clearInterval(timer);
+    function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = timestamp - startTime;
+        
+        current = Math.min((progress / duration) * target, target);
+        element.textContent = Math.floor(current);
+        
+        if (progress < duration) {
+            requestAnimationFrame(animate);
         } else {
-            element.textContent = Math.floor(current);
+            element.textContent = target;
         }
-    }, 16);
+    }
+    
+    requestAnimationFrame(animate);
 }
 
 // Trigger counter animation when section is visible
